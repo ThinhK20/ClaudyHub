@@ -57,14 +57,14 @@ export function createAppContext(options: AppContextOptions): AppContext {
     void switchWorkspace(workspace)
   })
   const docs = createDocService(db, () => workspaces.getActive())
-  let evidence: EvidenceService
   const runs = createRunService(db, {
     workspaceCaseIds: () => docs.caseIds(),
     activeWorkspaceId: () => workspaces.getActive()?.id ?? null,
     defaultCodebaseId: () => codebases.list().find((item) => item.isDefault)?.id ?? null,
     onRunDeleted: (runId) => void evidence.removeRunFolder(runId)
   })
-  evidence = createEvidenceService(path.join(options.userDataDir, 'evidence'), runs.repo, (id) => runs.get(id))
+  // `onRunDeleted` above only runs after startup, by which time `evidence` exists.
+  const evidence = createEvidenceService(path.join(options.userDataDir, 'evidence'), runs.repo, (id) => runs.get(id))
 
   const providers: ProviderRegistry = options.stubAi
     ? { copilot: createStubProvider('copilot'), claude: createStubProvider('claude') }

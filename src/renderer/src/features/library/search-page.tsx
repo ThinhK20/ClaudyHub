@@ -11,6 +11,8 @@ const route = getRouteApi('/search')
 
 /** Renders an FTS snippet, turning \u0002…\u0003 markers into <mark> without using HTML. */
 function Snippet({ text }: { text: string }): React.JSX.Element {
+  // The control characters are SQLite FTS highlight markers, chosen because they never occur in document text.
+  // eslint-disable-next-line no-control-regex
   const parts = text.split(/(\u0002[^\u0003]*\u0003)/g)
   return (
     <>

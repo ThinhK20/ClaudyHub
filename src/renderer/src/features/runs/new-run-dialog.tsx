@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -24,11 +24,18 @@ export function NewRunDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [provider, setProvider] = useState<ProviderId>('copilot')
   const [creating, setCreating] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    setCodebaseId(codebases.find((item) => item.isDefault)?.id ?? null)
-    setProvider(settings?.defaultProvider ?? 'copilot')
-  }, [open, codebases, settings?.defaultProvider])
+  // Each time the dialog opens (or its defaults load while open) the pickers start on the defaults.
+  const defaultCodebaseId = codebases.find((item) => item.isDefault)?.id ?? null
+  const defaultProvider = settings?.defaultProvider ?? 'copilot'
+  const defaults = open ? `${defaultCodebaseId ?? ''}|${defaultProvider}` : null
+  const [appliedDefaults, setAppliedDefaults] = useState<string | null>(null)
+  if (defaults !== appliedDefaults) {
+    setAppliedDefaults(defaults)
+    if (open) {
+      setCodebaseId(defaultCodebaseId)
+      setProvider(defaultProvider)
+    }
+  }
 
   const create = async (): Promise<void> => {
     setCreating(true)

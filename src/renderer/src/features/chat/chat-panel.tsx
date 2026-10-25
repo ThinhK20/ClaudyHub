@@ -80,8 +80,13 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const [provider, setProvider] = useState<ProviderId>(props.defaultProvider)
   const scroller = useRef<HTMLDivElement>(null)
 
-  useEffect(() => setCodebaseId(props.defaultCodebaseId), [props.defaultCodebaseId])
-  useEffect(() => setProvider(props.defaultProvider), [props.defaultProvider])
+  // A new default (e.g. from Settings) replaces the current choice.
+  const [defaults, setDefaults] = useState({ codebaseId: props.defaultCodebaseId, provider: props.defaultProvider })
+  if (props.defaultCodebaseId !== defaults.codebaseId || props.defaultProvider !== defaults.provider) {
+    setDefaults({ codebaseId: props.defaultCodebaseId, provider: props.defaultProvider })
+    if (props.defaultCodebaseId !== defaults.codebaseId) setCodebaseId(props.defaultCodebaseId)
+    if (props.defaultProvider !== defaults.provider) setProvider(props.defaultProvider)
+  }
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
   }, [history.data?.length, pendingQuestion, job.streamed])

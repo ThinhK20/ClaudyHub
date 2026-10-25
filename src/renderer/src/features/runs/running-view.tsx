@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Flag, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProviderId, Run } from '@shared/domain'
@@ -78,12 +78,11 @@ function FinalPanel({ run }: { run: Run }): React.JSX.Element {
 /** Testing stage: case list, result form, and the Test Assistant beside them. */
 export function RunningView({ run, defaultProvider }: { run: Run; defaultProvider: ProviderId }): React.JSX.Element {
   const firstOpen = run.cases.find((item) => item.execution === 'not-run')?.id ?? run.cases[0]?.id ?? FINAL
-  const [selected, setSelected] = useState<string>(firstOpen)
+  const [chosen, setSelected] = useState<string>(firstOpen)
   const [assistantOpen, setAssistantOpen] = useState(readAssistantOpen)
 
-  useEffect(() => {
-    if (selected !== FINAL && !run.cases.some((item) => item.id === selected)) setSelected(run.cases[0]?.id ?? FINAL)
-  }, [run.cases, selected])
+  // A case removed from the run falls back to the first one.
+  const selected = chosen === FINAL || run.cases.some((item) => item.id === chosen) ? chosen : (run.cases[0]?.id ?? FINAL)
 
   const toggleAssistant = (): void => {
     setAssistantOpen((open) => {

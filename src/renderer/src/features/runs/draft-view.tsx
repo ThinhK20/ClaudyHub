@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Plus, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProviderId, Run } from '@shared/domain'
@@ -54,12 +54,14 @@ export function DraftView({ run, defaultProvider }: { run: Run; defaultProvider:
   const [reason, setReason] = useState('')
   const [problems, setProblems] = useState<string[]>([])
 
-  useEffect(() => {
-    if (dirty) return
+  // A newer copy of the run replaces the form unless the user has unsaved edits.
+  const [syncedRun, setSyncedRun] = useState(run)
+  if (!dirty && run !== syncedRun) {
+    setSyncedRun(run)
     setCases(toEditable(run))
     setAnalysis(run.analysis)
     setCoverageNote(run.coverageNote)
-  }, [run, dirty])
+  }
 
   const edit = (updater: (current: EditableCase[]) => EditableCase[]): void => {
     setCases(updater)

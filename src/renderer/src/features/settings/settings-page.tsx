@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, FolderOpen, Import, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -205,7 +205,11 @@ function GeneralSection({ settings }: { settings: Settings }): React.JSX.Element
   const save = useSaveSettings()
   const [displayName, setDisplayName] = useState(settings.displayName)
   const [github, setGithub] = useState(settings.github)
-  useEffect(() => setGithub(settings.github), [settings.github])
+  const [savedGithub, setSavedGithub] = useState(settings.github)
+  if (settings.github !== savedGithub) {
+    setSavedGithub(settings.github)
+    setGithub(settings.github)
+  }
 
   return (
     <>
