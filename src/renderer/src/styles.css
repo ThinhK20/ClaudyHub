@@ -118,6 +118,10 @@
 .prose-wide > :is(p, ul, ol, blockquote) {
   max-width: 78ch;
 }
+/* "Full width" in a document's menu lifts the readable line length. */
+.doc-full-width .prose-qa {
+  max-width: none;
+}
 .prose-qa > :first-child {
   margin-top: 0;
 }
@@ -215,4 +219,14 @@ mark.hit {
 }
 .doc-editor .tableWrapper {
   @apply overflow-x-auto;
+}
+
+/* Search in note (CSS Custom Highlight API, so the document's DOM is never touched). */
+::highlight(doc-find) {
+  background-color: var(--blocked-soft);
+  color: var(--ink);
+}
+::highlight(doc-find-current) {
+  background-color: var(--blocked);
+  color: var(--surface);
 }

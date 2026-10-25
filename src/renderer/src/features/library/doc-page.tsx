@@ -1,20 +1,24 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, getRouteApi, useBlocker, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
-import { ArrowLeft, Check, ChevronRight, Pencil } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, Columns2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { Markdown, extractHeadings } from '@/components/markdown'
 import { ResizeHandle, usePanelWidth } from '@/components/resizable'
 import { Button } from '@/components/ui/button'
-import { TextContextMenu, type TextMenuActions } from '@/components/text-context-menu'
+import { TextContextMenu } from '@/components/text-context-menu'
 import { Dialog } from '@/components/ui/dialog'
 import { ErrorNotice, PageHeader, Spinner } from '@/components/ui/misc'
 import { call } from '@/lib/ipc'
 import { keys } from '@/lib/queries'
 import type { DocSection } from '@shared/domain'
-import { SECTION_LABELS, errorText, groupLabel } from '@/lib/utils'
+import { SECTION_LABELS, cn, errorText, groupLabel } from '@/lib/utils'
+import { DocActionsMenu } from './doc-actions-menu'
 import type { DocEditorHandle } from './doc-editor'
+import { DocFindBar } from './doc-find-bar'
 import { DocProperties } from './doc-properties'
+import { DocSplitPane } from './doc-split-pane'
+import { readMenuActions } from './read-menu-actions'
 
 // The editor and its dependencies load only when a document is first edited.
 const DocEditor = lazy(() => import('./doc-editor'))
@@ -41,22 +45,6 @@ function BackButton({ section, group }: { section: DocSection; group?: string })
       <ArrowLeft />
     </Button>
   )
-}
-
-/** Read mode offers the copy actions; editing ones stay disabled. Markdown conversion loads the editor code on first use. */
-function readMenuActions(docPath: string): TextMenuActions {
-  return {
-    selectedText: (root) => {
-      const selection = window.getSelection()
-      if (!selection || selection.rangeCount === 0 || !root.contains(selection.getRangeAt(0).commonAncestorContainer)) return ''
-      return selection.toString()
-    },
-    copy: () => document.execCommand('copy'),
-    copyMarkdown: async (root) => {
-      const { domSelectionMarkdown } = await import('./selection-markdown')
-      return domSelectionMarkdown(root, docPath)
-    }
-  }
 }
 
 interface ConfirmDiscardProps {
@@ -88,6 +76,28 @@ function ConfirmDiscard({ open, onKeep, onDiscard }: ConfirmDiscardProps): React
       <p className="text-[13px] text-muted">If you leave now, the changes are lost. Save first to keep them.</p>
     </Dialog>
   )
+}
+
+const FULL_WIDTH_KEY = 'qa-hub.doc.full-width'
+
+/** Whether documents use the whole page width instead of a readable line length, remembered across documents. */
+function useFullWidth(): [boolean, (fullWidth: boolean) => void] {
+  const [fullWidth, setFullWidth] = useState(() => {
+    try {
+      return localStorage.getItem(FULL_WIDTH_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const change = (next: boolean): void => {
+    setFullWidth(next)
+    try {
+      localStorage.setItem(FULL_WIDTH_KEY, next ? '1' : '0')
+    } catch {
+      // Storage is a convenience; the setting still applies for this session.
+    }
+  }
+  return [fullWidth, change]
 }
 
 interface DocEditing {
@@ -157,6 +167,11 @@ export function DocPage(): React.JSX.Element {
   const editorRef = useRef<DocEditorHandle | null>(null)
   const edit = useDocEditing(path, editorRef)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const [finding, setFinding] = useState(false)
+  // The split stays open while moving between documents; `path` is null while a note is being picked.
+  const [split, setSplit] = useState<{ path: string | null } | null>(null)
+  const [fullWidth, setFullWidth] = useFullWidth()
+  const contentRef = useRef<HTMLElement>(null)
   // Leaving the page (back button, links, sidebar) with unsaved edits asks first.
   const blocker = useBlocker({ shouldBlockFn: () => edit.dirty, withResolver: true, enableBeforeUnload: false })
 
@@ -175,6 +190,16 @@ export function DocPage(): React.JSX.Element {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [edit.editing])
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        setFinding(true)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   if (doc.isPending) {
     return (
@@ -192,6 +217,29 @@ export function DocPage(): React.JSX.Element {
   }
 
   const data = doc.data
+  const docActions = (
+    <>
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={() => setSplit(split ? null : { path: null })}
+        aria-pressed={Boolean(split)}
+        aria-label={split ? 'Close split' : 'Create new split'}
+        title={split ? 'Close split' : 'Create new split'}
+        className={split ? 'bg-sunken text-ink' : undefined}
+      >
+        <Columns2 />
+      </Button>
+      <DocActionsMenu
+        doc={data}
+        getContent={() => contentRef.current}
+        fullWidth={fullWidth}
+        onFullWidthChange={setFullWidth}
+        onSearch={() => setFinding(true)}
+        onDeleted={edit.stop}
+      />
+    </>
+  )
 
   return (
     <div className="flex h-full flex-col">
@@ -217,16 +265,20 @@ export function DocPage(): React.JSX.Element {
               >
                 {edit.saving ? <Spinner className="size-3.5" /> : <Check />} Save
               </Button>
+              {docActions}
             </>
           ) : (
-            <Button
-              size="sm"
-              onClick={() => edit.start(data.body)}
-              disabled={!data.editable}
-              title={data.editable ? 'Edit this document' : 'This document cannot be edited here because its frontmatter could not be read'}
-            >
-              <Pencil /> Edit
-            </Button>
+            <>
+              <Button
+                size="sm"
+                onClick={() => edit.start(data.body)}
+                disabled={!data.editable}
+                title={data.editable ? 'Edit this document' : 'This document cannot be edited here because its frontmatter could not be read'}
+              >
+                <Pencil /> Edit
+              </Button>
+              {docActions}
+            </>
           )
         }
         subtitle={
@@ -245,32 +297,43 @@ export function DocPage(): React.JSX.Element {
           </span>
         }
       />
-      <div className="flex min-h-0 flex-1 overflow-y-auto">
-        {edit.editing ? (
-          <article className="min-w-0 flex-1">
-            <Suspense
-              fallback={
-                <div className="p-8">
-                  <Spinner />
-                </div>
-              }
-            >
-              <DocEditor ref={editorRef} markdown={edit.base} docPath={data.path} onDirtyChange={edit.setDirty} />
-            </Suspense>
-          </article>
-        ) : (
-          <TextContextMenu actions={readMenuActions(data.path)}>
-            <article className="min-w-0 flex-1 px-8 py-6">
-              <Markdown text={data.body} docPath={data.path} />
+      {finding ? <DocFindBar key={path} getRoot={() => contentRef.current} onClose={() => setFinding(false)} /> : null}
+      <div className={cn('flex min-h-0 flex-1', fullWidth && 'doc-full-width')}>
+        <div className="flex min-w-0 flex-1 basis-0 overflow-y-auto">
+          {edit.editing ? (
+            <article ref={contentRef} className="min-w-0 flex-1">
+              <Suspense
+                fallback={
+                  <div className="p-8">
+                    <Spinner />
+                  </div>
+                }
+              >
+                <DocEditor ref={editorRef} markdown={edit.base} docPath={data.path} onDirtyChange={edit.setDirty} />
+              </Suspense>
             </article>
-          </TextContextMenu>
-        )}
-        <div className="sticky top-0 hidden self-stretch lg:flex">
-          <ResizeHandle panel={sidePanel} edge="left" label="Resize properties panel" />
+          ) : (
+            <TextContextMenu actions={readMenuActions(data.path)}>
+              <article ref={contentRef} className="min-w-0 flex-1 px-8 py-6">
+                <Markdown text={data.body} docPath={data.path} />
+              </article>
+            </TextContextMenu>
+          )}
+          {/* A split takes the properties panel's room so both notes get half the width. */}
+          {split ? null : (
+            <>
+              <div className="sticky top-0 hidden self-stretch lg:flex">
+                <ResizeHandle panel={sidePanel} edge="left" label="Resize properties panel" />
+              </div>
+              <aside className="hidden shrink-0 border-l border-line bg-canvas px-4 py-6 lg:block" style={{ width: sidePanel.width }}>
+                <DocProperties frontmatter={data.frontmatter} headings={headings} path={data.path} />
+              </aside>
+            </>
+          )}
         </div>
-        <aside className="hidden shrink-0 border-l border-line bg-canvas px-4 py-6 lg:block" style={{ width: sidePanel.width }}>
-          <DocProperties frontmatter={data.frontmatter} headings={headings} path={data.path} />
-        </aside>
+        {split ? (
+          <DocSplitPane mainPath={data.path} path={split.path} onPathChange={(next) => setSplit({ path: next })} onClose={() => setSplit(null)} />
+        ) : null}
       </div>
       <ConfirmDiscard
         open={confirmCancel || blocker.status === 'blocked'}

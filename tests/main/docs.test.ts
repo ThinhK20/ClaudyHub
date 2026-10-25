@@ -170,4 +170,36 @@ describe('doc service', () => {
       await expect(service.save('qa/notes.txt', 'x', '')).rejects.toThrow('Markdown')
     })
   })
+
+  describe('remove and copyTo', () => {
+    const RELEASE = 'qa/releases/2026.10.md'
+
+    it('hands the file to discard and drops it from the index', async () => {
+      await service.reindex()
+      const discarded: string[] = []
+      await service.remove(RELEASE, async (full) => {
+        discarded.push(full)
+        await rm(full)
+      })
+      expect(discarded).toEqual([path.join(root, 'qa', 'releases', '2026.10.md')])
+      expect(service.list().map((doc) => doc.path)).not.toContain(RELEASE)
+      expect(service.search('form build')).toEqual([])
+    })
+
+    it('copies the file to the chosen destination', async () => {
+      const destination = path.join(root, 'copy.md')
+      await service.copyTo(RELEASE, destination)
+      expect(await readFile(destination, 'utf8')).toBe(FIXTURE[RELEASE])
+    })
+
+    it('refuses missing files, non-Markdown files and paths outside the workspace', async () => {
+      const discard = async (): Promise<void> => {
+        throw new Error('should not be called')
+      }
+      await expect(service.remove('missing.md', discard)).rejects.toThrow('Document not found')
+      await expect(service.remove('qa/a.txt', discard)).rejects.toThrow('Only Markdown documents can be deleted')
+      await expect(service.remove('../outside.md', discard)).rejects.toThrow('outside')
+      await expect(service.copyTo('missing.md', path.join(root, 'x.md'))).rejects.toThrow('Document not found')
+    })
+  })
 })

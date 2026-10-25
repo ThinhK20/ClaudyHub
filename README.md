@@ -1,6 +1,6 @@
 # QA Hub
 
-Desktop successor to `qa-portal`: a workspace for QA testers to browse the regression library, run test windows, and ask AI assistants that can read the product's codebase.
+A workspace for QA testers to browse the regression library, run test windows, and ask AI assistants that can read the product's codebase.
 
 Built with Electron, React 19, TypeScript, Tailwind CSS v4 and SQLite (Node's built-in `node:sqlite`).
 

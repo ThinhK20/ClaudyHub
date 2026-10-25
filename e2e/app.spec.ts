@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
@@ -29,6 +29,7 @@ test.beforeAll(async () => {
   )
   await write(workspace, 'qa/regression-assets/forms/Form checklist.md', '# Form checklist\n\n- [x] Submit works\n- [ ] Validation works\n')
   await write(workspace, 'qa/regression-assets/forms/AI structure.md', '# AI structure\n\nAlpha first line.\n\nBeta second line.\n\n```sh\n# keep comment\necho hi\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n')
+  await write(workspace, 'notes/scratch/Throwaway note.md', '# Throwaway note\n\nDisposable body text.\n\nAnother body line.\n')
   await write(workspace, 'qa-portal/diagrams/settings.md', 'graph TD\n  Open --> Validate\n')
   await write(codebase, 'src/settings.ts', 'export const validate = () => true\n')
 
@@ -228,6 +229,59 @@ test('AI Replace keeps the structure around the selection', async () => {
 
   await page.getByRole('button', { name: 'Cancel' }).click()
   await page.getByRole('button', { name: 'Discard changes' }).click()
+})
+
+test('a document opens a second note in a split and offers search, download and delete', async () => {
+  await page.keyboard.press('Control+K')
+  await page.getByPlaceholder('Search documents, runs and pages').fill('throwaway')
+  await page.getByRole('option', { name: /Throwaway note/ }).click()
+  await expect(page.getByText('Disposable body text.')).toBeVisible()
+
+  // Split: pick another note and read it beside the open one.
+  await page.getByRole('button', { name: 'Create new split' }).click()
+  const split = page.getByRole('region', { name: 'Split view' })
+  await split.getByPlaceholder('Search for a note by its name').fill('reject')
+  await split.getByRole('option', { name: /Reject invalid settings/ }).click()
+  await expect(split.getByText('Invalid values are refused.')).toBeVisible()
+  await expect(page.getByText('Disposable body text.')).toBeVisible()
+  await split.getByRole('button', { name: 'Close split' }).click()
+  await expect(split).toBeHidden()
+
+  // Search in note counts matches and steps through them.
+  await page.getByRole('button', { name: 'More actions' }).click()
+  await page.getByRole('menuitem', { name: /Search in note/ }).click()
+  const find = page.getByLabel('Search in note')
+  await find.fill('body')
+  await expect(page.getByText('1 of 2')).toBeVisible()
+  await find.press('Enter')
+  await expect(page.getByText('2 of 2')).toBeVisible()
+  await find.press('Escape')
+  await expect(find).toBeHidden()
+
+  // Download copies the Markdown file to the chosen location.
+  const target = path.join(root, 'downloaded.md')
+  await app.evaluate(({ dialog }, file) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog
+  }, target)
+  await page.getByRole('button', { name: 'More actions' }).click()
+  await page.getByRole('menuitem', { name: 'Download' }).click()
+  await expect.poll(() => readFile(target, 'utf8').catch(() => '')).toContain('Disposable body text.')
+
+  // Delete asks first, hands the file to the trash and leaves the document.
+  await app.evaluate(({ shell }) => {
+    const trashed: string[] = []
+    Object.assign(globalThis, { trashed })
+    shell.trashItem = async (file: string) => {
+      trashed.push(file)
+    }
+  })
+  await page.getByRole('button', { name: 'More actions' }).click()
+  await page.getByRole('menuitem', { name: 'Delete note' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete note' }).click()
+  await expect(page.getByText('Moved "Throwaway note" to the recycle bin')).toBeVisible()
+  await expect(page.getByText('Disposable body text.')).toBeHidden()
+  const trashed = await app.evaluate(() => (globalThis as unknown as { trashed: string[] }).trashed)
+  expect(trashed).toEqual([path.join(workspace, 'notes', 'scratch', 'Throwaway note.md')])
 })
 
 test('the explorer layout opens documents from the folder tree as tabs', async () => {

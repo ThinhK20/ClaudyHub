@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Doc, DocEntry, DocSection, SearchHit, Workspace } from '@shared/domain'
 import { transaction, type Db } from '../../db/connection'
@@ -21,6 +21,10 @@ export interface DocService {
   get(relativePath: string): Promise<Doc>
   /** Replaces a document's body, keeping its frontmatter text and line endings. Fails if the file changed since baseBody was read. */
   save(relativePath: string, body: string, baseBody: string): Promise<Doc>
+  /** Hands a document's file to `discard` (e.g. the system trash) and drops it from the index. */
+  remove(relativePath: string, discard: (fullPath: string) => Promise<void>): Promise<void>
+  /** Copies a document's file to an absolute destination the user chose. */
+  copyTo(relativePath: string, destination: string): Promise<void>
   search(query: string, limit?: number): SearchHit[]
   diagram(area: string): Promise<string | null>
   /** Numeric `id` frontmatter values of every indexed test case. */
@@ -82,6 +86,15 @@ export function createDocService(db: Db, activeWorkspace: () => Workspace | null
       doc.title,
       doc.body
     )
+  }
+
+  /** Absolute path of an existing Markdown document in the active workspace. */
+  const existingDoc = (relativePath: string, action: string): string => {
+    const workspace = requireWorkspace()
+    if (!relativePath.toLowerCase().endsWith('.md')) throw new UserError(`Only Markdown documents can be ${action}`)
+    const full = resolveInside(workspace.path, relativePath)
+    if (!existsSync(full)) throw new UserError(`Document not found: ${relativePath}`)
+    return full
   }
 
   const removeOne = (workspaceId: string, relativePath: string): void => {
@@ -160,6 +173,19 @@ export function createDocService(db: Db, activeWorkspace: () => Workspace | null
         insert(workspace.id, saved)
       })
       return saved
+    },
+
+    async remove(relativePath, discard) {
+      const full = existingDoc(relativePath, 'deleted')
+      await discard(full)
+      const workspace = requireWorkspace()
+      transaction(db, () => removeOne(workspace.id, relativePath))
+    },
+
+    async copyTo(relativePath, destination) {
+      const full = existingDoc(relativePath, 'downloaded')
+      if (path.resolve(destination) === full) return
+      await copyFile(full, destination)
     },
 
     search(query, limit = DEFAULT_SEARCH_LIMIT) {

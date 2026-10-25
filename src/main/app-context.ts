@@ -28,6 +28,10 @@ export interface AppContextOptions {
   emit: <E extends keyof AppEvents>(event: E, payload: AppEvents[E]) => void
   pickFolder: (title: string) => Promise<string | null>
   openExternal: (url: string) => Promise<void>
+  /** Asks where to save a file; resolves null when cancelled. */
+  pickSaveFile: (title: string, defaultName: string) => Promise<string | null>
+  /** Moves a file to the system trash (recycle bin). */
+  trashFile: (fullPath: string) => Promise<void>
   /** Opens another app window showing a workspace document. */
   openDocWindow: (relativePath: string) => void
   claudeExecutablePath?: string
@@ -139,6 +143,16 @@ export function createAppContext(options: AppContextOptions): AppContext {
       const doc = await docs.save(relative, body, baseBody)
       emit('docs:changed', { count: 1 })
       return doc
+    },
+    'docs:delete': async ({ path: relative }) => {
+      await docs.remove(relative, options.trashFile)
+      emit('docs:changed', { count: 1 })
+    },
+    'docs:download': async ({ path: relative }) => {
+      const destination = await options.pickSaveFile('Download document', path.posix.basename(relative))
+      if (!destination) return null
+      await docs.copyTo(relative, destination)
+      return destination
     },
 
     'runs:list': () => runs.list(),

@@ -52,6 +52,8 @@ export const ipcInputs = {
   'docs:diagram': z.object({ area: z.string().regex(/^[a-z0-9-]{1,80}$/) }),
   'docs:reindex': z.void(),
   'docs:save': z.object({ path: pathSchema, body: z.string().max(LIMITS.docBody), baseBody: z.string().max(LIMITS.docBody) }),
+  'docs:delete': z.object({ path: pathSchema }),
+  'docs:download': z.object({ path: pathSchema }),
 
   'runs:list': z.void(),
   'runs:get': z.object({ id: idSchema }),
@@ -166,6 +168,9 @@ export interface IpcOutputs {
   'docs:diagram': string | null
   'docs:reindex': { count: number }
   'docs:save': Doc
+  'docs:delete': void
+  /** Where the copy was saved, or null when the user cancelled. */
+  'docs:download': string | null
 
   'runs:list': RunSummary[]
   'runs:get': Run

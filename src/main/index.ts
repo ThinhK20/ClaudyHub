@@ -138,6 +138,12 @@ async function bootstrap(): Promise<void> {
       return result.canceled ? null : (result.filePaths[0] ?? null)
     },
     openExternal: (url) => shell.openExternal(url),
+    pickSaveFile: async (title, defaultName) => {
+      const options = { title, defaultPath: defaultName, filters: [{ name: 'Markdown', extensions: ['md'] }] }
+      const result = mainWindow ? await dialog.showSaveDialog(mainWindow, options) : await dialog.showSaveDialog(options)
+      return result.canceled ? null : (result.filePath ?? null)
+    },
+    trashFile: (fullPath) => shell.trashItem(fullPath),
     openDocWindow: (relativePath) => {
       createWindow(relativePath)
     },
