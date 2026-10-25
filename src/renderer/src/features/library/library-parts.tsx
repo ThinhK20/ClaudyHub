@@ -49,11 +49,13 @@ export function featureArea(group: string | undefined): string | null {
 
 /** Feature-level tab: the workflow diagram for one feature group. */
 export function DiagramView({ source, feature }: { source: string; feature: string }): React.JSX.Element {
+  // A diagram's source links name the feature's own checklists, so they resolve from the feature folder.
+  const linkBase = `qa/regression-assets/${feature}/${feature}.md`
   return (
     <div className="p-6">
       <h2 className="font-display mb-4 text-[15px] font-semibold">{groupLabel(feature)} workflow</h2>
       <div className="rounded-lg border border-line bg-surface p-5">
-        <Markdown text={source.includes('```') ? source : `\`\`\`mermaid\n${source}\n\`\`\``} className="prose-wide" />
+        <Markdown text={source.includes('```') ? source : `\`\`\`mermaid\n${source}\n\`\`\``} docPath={linkBase} className="prose-wide" />
       </div>
     </div>
   )

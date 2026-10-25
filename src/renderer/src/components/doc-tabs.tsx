@@ -156,10 +156,24 @@ interface TabBarProps {
   activePath: string | null
 }
 
+/** Lets a mouse wheel scroll the tab strip sideways: down moves right, up moves left. Touchpad side swipes pass through untouched. */
+function wheelScrollsSideways(strip: HTMLDivElement | null): (() => void) | undefined {
+  if (!strip) return undefined
+  const onWheel = (event: WheelEvent): void => {
+    if (event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+    if (strip.scrollWidth <= strip.clientWidth) return
+    event.preventDefault()
+    strip.scrollLeft += event.deltaY
+  }
+  // Non-passive, so preventDefault can stop the wheel from also scrolling the page.
+  strip.addEventListener('wheel', onWheel, { passive: false })
+  return () => strip.removeEventListener('wheel', onWheel)
+}
+
 /** Open documents as tabs. Pinned tabs sit first; right-click a tab for pin, close and window actions. */
 export function TabBar({ state, titles, activePath }: TabBarProps): React.JSX.Element {
   return (
-    <div role="tablist" aria-label="Open documents" className="flex shrink-0 overflow-x-auto border-b border-line bg-canvas">
+    <div ref={wheelScrollsSideways} role="tablist" aria-label="Open documents" className="flex shrink-0 overflow-x-auto border-b border-line bg-canvas">
       {state.tabs.map((path) => {
         const active = path === activePath
         const isPinned = state.pinned.has(path)
