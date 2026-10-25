@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Outlet, useMatch } from '@tanstack/react-router'
+import { Link, Outlet, useMatch, useRouterState } from '@tanstack/react-router'
 import {
   BookOpen,
   ChevronRight,
@@ -252,6 +252,9 @@ export function ExplorerShell({ workspace }: { workspace: Workspace }): React.JS
   const [collapsed, toggleCollapsed] = useSidebarCollapsed()
   const panel = usePanelWidth({ key: 'qa-hub.width.explorer', initial: 272, min: 200, max: 520 })
   const activePath = useMatch({ from: '/library/doc/$', shouldThrow: false })?.params._splat ?? null
+  // The document tree belongs to the Library; other pages get the full width.
+  const inLibrary = useRouterState({ select: (state) => state.location.pathname.startsWith('/library') })
+  const showPanel = inLibrary && !collapsed
   const docTabs = useDocTabs(workspace.id, activePath, docs)
   const titles = useMemo(() => new Map((docs ?? []).map((doc) => [doc.path, doc.title])), [docs])
 
@@ -263,12 +266,13 @@ export function ExplorerShell({ workspace }: { workspace: Workspace }): React.JS
         <button
           type="button"
           onClick={toggleCollapsed}
-          className="grid h-8 place-items-center rounded-md text-faint hover:bg-sunken hover:text-ink"
-          aria-label={collapsed ? 'Show explorer' : 'Hide explorer'}
-          aria-expanded={!collapsed}
-          title={`${collapsed ? 'Show' : 'Hide'} explorer (Ctrl+B)`}
+          disabled={!inLibrary}
+          className="grid h-8 place-items-center rounded-md text-faint enabled:hover:bg-sunken enabled:hover:text-ink disabled:opacity-40"
+          aria-label={showPanel ? 'Hide explorer' : 'Show explorer'}
+          aria-expanded={showPanel}
+          title={inLibrary ? `${collapsed ? 'Show' : 'Hide'} explorer (Ctrl+B)` : 'The explorer is available in the Library'}
         >
-          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+          {showPanel ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
         </button>
         <button
           type="button"
@@ -287,14 +291,14 @@ export function ExplorerShell({ workspace }: { workspace: Workspace }): React.JS
           <NavItem to="/settings" label="Settings" icon={Settings} collapsed />
         </div>
       </aside>
-      {collapsed ? null : (
+      {showPanel ? (
         <>
           <aside className="flex shrink-0 flex-col border-r border-line bg-canvas" style={{ width: panel.width }} aria-label="Explorer">
             <ExplorerPanel workspace={workspace} docs={docs} activePath={activePath} />
           </aside>
           <ResizeHandle panel={panel} edge="right" label="Resize explorer" />
         </>
-      )}
+      ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
         {docTabs.tabs.length ? <TabBar state={docTabs} titles={titles} activePath={activePath} /> : null}
         <main className="min-h-0 flex-1 overflow-hidden">

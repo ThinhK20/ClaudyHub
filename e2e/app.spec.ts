@@ -233,6 +233,12 @@ test('AI Replace keeps the structure around the selection', async () => {
 test('the explorer layout opens documents from the folder tree as tabs', async () => {
   await page.getByRole('link', { name: 'Settings' }).click()
   await page.getByLabel('Layout').selectOption('explorer')
+  // The document tree appears only in the Library.
+  const rail = page.getByRole('complementary', { name: 'Main' })
+  await expect(page.getByRole('tree', { name: 'Workspace documents' })).toBeHidden()
+  await expect(rail.getByRole('button', { name: 'Show explorer' })).toBeDisabled()
+  await rail.getByRole('link', { name: 'Library' }).click()
+  await expect(rail.getByRole('button', { name: 'Hide explorer' })).toBeEnabled()
 
   // The tree is organised like the classic Library: sections (open by default), then feature groups.
   const tree = page.getByRole('tree', { name: 'Workspace documents' })
@@ -295,7 +301,7 @@ test('the explorer layout opens documents from the folder tree as tabs', async (
   await expect(tabs.getByRole('tab')).toHaveText(['Reject invalid settings'])
   await movedWindow.close()
 
-  await page.getByRole('complementary', { name: 'Main' }).getByRole('link', { name: 'Settings' }).click()
+  await rail.getByRole('link', { name: 'Settings' }).click()
   await page.getByLabel('Layout').selectOption('classic')
   await expect(page.getByRole('tree', { name: 'Workspace documents' })).toBeHidden()
 })
