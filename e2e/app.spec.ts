@@ -186,7 +186,7 @@ test('the toolbar AI assistant works on the whole document and the panel can be 
   await expect(panel).toContainText('Whole document')
 
   // Opens centered in the window.
-  const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
+  const viewport = await page.evaluate<{ width: number; height: number }>('({ width: innerWidth, height: innerHeight })')
   const box = await panel.boundingBox()
   expect(Math.abs(box!.x + box!.width / 2 - viewport.width / 2)).toBeLessThan(2)
   expect(Math.abs(box!.y + box!.height / 2 - viewport.height / 2)).toBeLessThan(2)
