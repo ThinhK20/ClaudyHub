@@ -33,6 +33,7 @@ export const ipcInputs = {
   'app:bootstrap': z.void(),
   'dialog:pickFolder': z.object({ title: z.string().max(200) }),
   'shell:openExternal': z.object({ url: z.string().url().max(2000) }),
+  'window:openDoc': z.object({ path: pathSchema }),
 
   'workspaces:list': z.void(),
   'workspaces:add': z.object({ path: pathSchema, name: z.string().max(120).optional() }),
@@ -146,6 +147,7 @@ export interface IpcOutputs {
   'app:bootstrap': BootstrapInfo
   'dialog:pickFolder': string | null
   'shell:openExternal': void
+  'window:openDoc': void
 
   'workspaces:list': Workspace[]
   'workspaces:add': Workspace

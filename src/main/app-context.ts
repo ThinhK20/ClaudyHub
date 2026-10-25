@@ -28,6 +28,8 @@ export interface AppContextOptions {
   emit: <E extends keyof AppEvents>(event: E, payload: AppEvents[E]) => void
   pickFolder: (title: string) => Promise<string | null>
   openExternal: (url: string) => Promise<void>
+  /** Opens another app window showing a workspace document. */
+  openDocWindow: (relativePath: string) => void
   claudeExecutablePath?: string
   /** Replace both AI engines with deterministic stubs (end-to-end tests). */
   stubAi?: boolean
@@ -115,6 +117,7 @@ export function createAppContext(options: AppContextOptions): AppContext {
       if (!/^https?:\/\//i.test(url)) throw new Error('Only web links can be opened')
       await options.openExternal(url)
     },
+    'window:openDoc': ({ path: relative }) => options.openDocWindow(relative),
 
     'workspaces:list': () => workspaces.list(),
     'workspaces:add': (input) => workspaces.add(input),

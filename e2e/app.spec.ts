@@ -29,6 +29,7 @@ test.beforeAll(async () => {
   )
   await write(workspace, 'qa/regression-assets/forms/Form checklist.md', '# Form checklist\n\n- [x] Submit works\n- [ ] Validation works\n')
   await write(workspace, 'qa/regression-assets/forms/AI structure.md', '# AI structure\n\nAlpha first line.\n\nBeta second line.\n\n```sh\n# keep comment\necho hi\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n')
+  await write(workspace, 'qa-portal/diagrams/settings.md', 'graph TD\n  Open --> Validate\n')
   await write(codebase, 'src/settings.ts', 'export const validate = () => true\n')
 
   app = await electron.launch({
@@ -233,10 +234,23 @@ test('the explorer layout opens documents from the folder tree as tabs', async (
   await page.getByRole('link', { name: 'Settings' }).click()
   await page.getByLabel('Layout').selectOption('explorer')
 
+  // The tree is organised like the classic Library: sections (open by default), then feature groups.
   const tree = page.getByRole('tree', { name: 'Workspace documents' })
-  await tree.getByRole('treeitem', { name: 'qa', exact: true }).click()
-  await tree.getByRole('treeitem', { name: 'regression-assets' }).click()
-  await tree.getByRole('treeitem', { name: 'forms' }).click()
+  await expect(tree.getByRole('treeitem', { name: /^Test cases/ })).toHaveAttribute('aria-expanded', 'true')
+  await expect(tree.getByRole('treeitem', { name: /^Regression checklists/ })).toBeVisible()
+
+  // Clicking a folder shows it on the right and opens it; a feature with a diagram opens on the diagram.
+  await tree.getByRole('treeitem', { name: /^Settings/ }).click()
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Settings workflow' })).toBeVisible()
+  await page.getByRole('link', { name: 'Documents', exact: true }).click()
+  await expect(page.getByRole('main').getByRole('link', { name: /Reject invalid settings/ })).toBeVisible()
+  await tree.getByRole('button', { name: 'Collapse Settings' }).click()
+  await expect(tree.getByRole('treeitem', { name: 'Reject invalid settings' })).toBeHidden()
+
+  await tree.getByRole('treeitem', { name: /^Forms/ }).click()
+  await expect(page.getByRole('heading', { name: 'Forms', level: 1 })).toBeVisible()
+  await expect(page.getByText('2 documents')).toBeVisible()
   await tree.getByRole('treeitem', { name: 'Form checklist' }).click()
   await expect(page.getByRole('heading', { name: 'Form checklist', level: 1 }).first()).toBeVisible()
 
@@ -244,13 +258,44 @@ test('the explorer layout opens documents from the folder tree as tabs', async (
   await tree.getByRole('treeitem', { name: 'Reject invalid settings' }).click()
   const tabs = page.getByRole('tablist', { name: 'Open documents' })
   await expect(tabs.getByRole('tab')).toHaveText(['Form checklist', 'Reject invalid settings'])
-  await expect(tree.getByRole('treeitem', { name: 'test-cases' })).toHaveAttribute('aria-expanded', 'true')
+  await expect(tree.getByRole('treeitem', { name: /^Settings/ })).toHaveAttribute('aria-expanded', 'true')
 
   await page.getByRole('button', { name: 'Close Reject invalid settings' }).click()
   await expect(page.getByRole('heading', { name: 'Form checklist', level: 1 }).first()).toBeVisible()
   await expect(tabs.getByRole('tab')).toHaveText(['Form checklist'])
 
-  await page.getByRole('link', { name: 'Settings' }).click()
+  // Right-click menu: reopen, pin, bulk close and a document window.
+  const tabMenu = async (name: string, item: string): Promise<void> => {
+    await tabs.getByRole('tab', { name }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: item }).click()
+  }
+  await tabMenu('Form checklist', 'Reopen last closed tab')
+  await expect(tabs.getByRole('tab')).toHaveText(['Form checklist', 'Reject invalid settings'])
+  await tabMenu('Reject invalid settings', 'Pin tab')
+  await expect(tabs.getByRole('tab')).toHaveText(['Reject invalid settings', 'Form checklist'])
+  await tabMenu('Reject invalid settings', 'Close all tabs')
+  await expect(tabs.getByRole('tab')).toHaveText(['Reject invalid settings'])
+  await expect(page.getByRole('heading', { name: 'Reject invalid settings', level: 1 }).first()).toBeVisible()
+  await tabMenu('Reject invalid settings', 'Unpin tab')
+
+  const opened = app.waitForEvent('window')
+  await tabMenu('Reject invalid settings', 'Copy this tab to a new window')
+  const docWindow = await opened
+  await expect(docWindow.getByRole('heading', { name: 'Reject invalid settings', level: 1 }).first()).toBeVisible()
+  await docWindow.close()
+  await expect(tabs.getByRole('tab')).toHaveText(['Reject invalid settings'])
+
+  await tree.getByRole('treeitem', { name: 'Reject invalid settings' }).waitFor()
+  await page.getByLabel('Filter documents').first().fill('')
+  await tree.getByRole('treeitem', { name: 'Form checklist' }).click()
+  const moved = app.waitForEvent('window')
+  await tabMenu('Form checklist', 'Move this tab to a new window')
+  const movedWindow = await moved
+  await expect(movedWindow.getByRole('heading', { name: 'Form checklist', level: 1 }).first()).toBeVisible()
+  await expect(tabs.getByRole('tab')).toHaveText(['Reject invalid settings'])
+  await movedWindow.close()
+
+  await page.getByRole('complementary', { name: 'Main' }).getByRole('link', { name: 'Settings' }).click()
   await page.getByLabel('Layout').selectOption('classic')
   await expect(page.getByRole('tree', { name: 'Workspace documents' })).toBeHidden()
 })

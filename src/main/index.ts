@@ -30,8 +30,11 @@ function isTrustedSender(event: IpcMainInvokeEvent): boolean {
   return url.startsWith('file://')
 }
 
+// Every window shows the same workspace, so all of them hear app events.
 function emit<E extends keyof AppEvents>(event: E, payload: AppEvents[E]): void {
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(event, payload)
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(event, payload)
+  }
 }
 
 /** In a packaged build the Claude SDK's native CLI lives in app.asar.unpacked (see electron-builder.yml). */
@@ -49,7 +52,13 @@ function claudeExecutablePath(): string | undefined {
   return existsSync(candidate) ? candidate : undefined
 }
 
-function createWindow(): BrowserWindow {
+/** Hash route of a workspace document, as the renderer's router reads it. */
+function docRoute(relativePath: string): string {
+  return `/library/doc/${relativePath.split('/').map(encodeURIComponent).join('/')}`
+}
+
+/** The main window, or with `docPath` a document window (`?window=doc`) that keeps its own tabs. */
+function createWindow(docPath?: string): BrowserWindow {
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -77,8 +86,16 @@ function createWindow(): BrowserWindow {
   window.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(process.env.ELECTRON_RENDERER_URL ?? 'file://')) event.preventDefault()
   })
-  if (isDev && process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else void window.loadFile(path.join(here, '../renderer/index.html'))
+  const search = docPath === undefined ? undefined : 'window=doc'
+  const hash = docPath === undefined ? undefined : docRoute(docPath)
+  if (isDev && process.env.ELECTRON_RENDERER_URL) {
+    const url = new URL(process.env.ELECTRON_RENDERER_URL)
+    if (search) url.search = search
+    if (hash) url.hash = hash
+    void window.loadURL(url.toString())
+  } else {
+    void window.loadFile(path.join(here, '../renderer/index.html'), { search, hash })
+  }
   return window
 }
 
@@ -121,6 +138,9 @@ async function bootstrap(): Promise<void> {
       return result.canceled ? null : (result.filePaths[0] ?? null)
     },
     openExternal: (url) => shell.openExternal(url),
+    openDocWindow: (relativePath) => {
+      createWindow(relativePath)
+    },
     claudeExecutablePath: claudeExecutablePath(),
     stubAi: process.env.QA_HUB_AI_STUB === '1'
   })

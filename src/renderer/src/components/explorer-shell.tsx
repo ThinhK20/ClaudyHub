@@ -1,103 +1,96 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Outlet, useMatch, useNavigate, useRouter } from '@tanstack/react-router'
-import { ChevronRight, FileText, FlaskConical, Folder, FolderGit2, FolderOpen, LayoutGrid, Library, PanelLeftClose, PanelLeftOpen, Search, Settings, X } from 'lucide-react'
-import type { DocEntry, Workspace } from '@shared/domain'
-import { ancestorFolders, buildDocTree, closeTab, filterDocTree, openTab, type DocTreeFile, type DocTreeNode } from '@shared/doc-tree'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, Outlet, useMatch } from '@tanstack/react-router'
+import {
+  BookOpen,
+  ChevronRight,
+  ClipboardCheck,
+  FileText,
+  FlaskConical,
+  Folder,
+  FolderGit2,
+  FolderOpen,
+  LayoutGrid,
+  Library,
+  ListChecks,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Rocket,
+  Search,
+  Settings,
+  type LucideIcon
+} from 'lucide-react'
+import type { DocEntry, DocSection, Workspace } from '@shared/domain'
+import { buildDocTree, filterDocTree, folderId, folderTrail, type DocTreeFile, type DocTreeFolder, type DocTreeNode } from '@shared/doc-tree'
 import { useCodebases, useDocs, useRuns } from '@/lib/queries'
-import { cn } from '@/lib/utils'
+import { readList, writeList } from '@/lib/stored-list'
+import { groupIcon } from '@/lib/group-icons'
+import { SECTION_LABELS, SECTION_ORDER, cn, groupLabel } from '@/lib/utils'
 import { CommandPalette } from './command-palette'
+import { TabBar, useDocTabs } from './doc-tabs'
 import { ResizeHandle, usePanelWidth } from './resizable'
 import { NavItem, useSidebarCollapsed } from './shell-parts'
 import { Input } from './ui/fields'
 import { Spinner } from './ui/misc'
 
-function readList(key: string): string[] {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(key) ?? '[]')
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
-  }
+const SECTION_ICONS: Record<DocSection, LucideIcon> = {
+  'test-cases': ListChecks,
+  assets: ClipboardCheck,
+  releases: Rocket,
+  'test-runs': FlaskConical,
+  guides: BookOpen
 }
 
-function writeList(key: string, list: readonly string[]): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(list))
-  } catch {
-    // Storage is a convenience; the state still applies for this session.
-  }
-}
+/**
+ * Folders open in the tree, remembered per workspace (sections start open). The folders leading to the open
+ * document or folder (`reveal`) open automatically.
+ */
+function useExpandedFolders(workspaceId: string, reveal: readonly string[]): [Set<string>, (folder: string, open: boolean) => void] {
+  const key = `qa-hub.explorer.folders.${workspaceId}`
+  const [expanded, setExpanded] = useState(() =>
+    localStorage.getItem(key) === null ? new Set(SECTION_ORDER.map((section) => folderId(section, ''))) : new Set(readList(localStorage, key))
+  )
+  const revealKey = reveal.join('\n')
+  const [revealed, setRevealed] = useState('')
 
-/** Folders the user has opened in the tree, remembered per workspace. Ancestors of the open document expand automatically. */
-function useExpandedFolders(workspaceId: string, activePath: string | null): [Set<string>, (folder: string) => void] {
-  const key = `qa-hub.explorer.expanded.${workspaceId}`
-  const [expanded, setExpanded] = useState(() => new Set(readList(key)))
-  const [revealed, setRevealed] = useState<string | null>(null)
-
-  if (activePath !== revealed) {
-    setRevealed(activePath)
-    const missing = activePath ? ancestorFolders(activePath).filter((folder) => !expanded.has(folder)) : []
+  if (revealKey !== revealed) {
+    setRevealed(revealKey)
+    const missing = reveal.filter((folder) => !expanded.has(folder))
     if (missing.length) setExpanded(new Set([...expanded, ...missing]))
   }
-  useEffect(() => writeList(key, [...expanded]), [key, expanded])
+  useEffect(() => writeList(localStorage, key, [...expanded]), [key, expanded])
 
-  const toggle = (folder: string): void =>
+  const setOpen = (folder: string, open: boolean): void =>
     setExpanded((current) => {
+      if (open === current.has(folder)) return current
       const next = new Set(current)
-      if (!next.delete(folder)) next.add(folder)
+      if (open) next.add(folder)
+      else next.delete(folder)
       return next
     })
-  return [expanded, toggle]
-}
-
-interface DocTabs {
-  tabs: string[]
-  close: (path: string) => Promise<void>
-}
-
-/** Open document tabs, remembered per workspace. Opening a document anywhere in the app adds its tab. */
-function useDocTabs(workspaceId: string, activePath: string | null, docs: DocEntry[] | undefined): DocTabs {
-  const key = `qa-hub.tabs.${workspaceId}`
-  const [stored, setTabs] = useState(() => readList(key))
-  const [opened, setOpened] = useState<string | null>(null)
-  const navigate = useNavigate()
-  const router = useRouter()
-
-  if (activePath !== opened) {
-    setOpened(activePath)
-    if (activePath && !stored.includes(activePath)) setTabs(openTab(stored, activePath))
-  }
-  // Documents deleted or renamed on disk lose their tab.
-  const tabs = useMemo(() => {
-    if (!docs) return stored
-    const known = new Set(docs.map((doc) => doc.path))
-    return stored.filter((path) => known.has(path) || path === activePath)
-  }, [stored, docs, activePath])
-  useEffect(() => writeList(key, tabs), [key, tabs])
-
-  const close = async (path: string): Promise<void> => {
-    const index = tabs.indexOf(path)
-    const result = closeTab(tabs, path, activePath)
-    setTabs(result.tabs)
-    if (result.next === undefined) return
-    await (result.next ? navigate({ to: '/library/doc/$', params: { _splat: result.next } }) : navigate({ to: '/library' }))
-    // Unsaved edits can keep the user on the document; its tab then comes back in place.
-    const stayed = router.state.location.pathname === router.buildLocation({ to: '/library/doc/$', params: { _splat: path } }).pathname
-    if (stayed) setTabs((current) => (current.includes(path) ? current : [...current.slice(0, index), path, ...current.slice(index)]))
-  }
-
-  return { tabs, close }
+  return [expanded, setOpen]
 }
 
 const INDENT_PX = 12
 /** Files skip the chevron column so their icons line up with folder icons. */
 const CHEVRON_PX = 20
 
-function FileRow({ node, active, depth }: { node: DocTreeFile; active: boolean; depth: number }): React.JSX.Element {
-  const ref = useRef<HTMLAnchorElement>(null)
+function useScrollIntoView<T extends HTMLElement>(active: boolean): React.RefObject<T | null> {
+  const ref = useRef<T>(null)
   useEffect(() => {
     if (active) ref.current?.scrollIntoView({ block: 'nearest' })
   }, [active])
+  return ref
+}
+
+function rowClass(active: boolean): string {
+  return cn(
+    'flex h-7 items-center gap-1.5 rounded text-[12.5px]',
+    active ? 'bg-surface font-medium text-ink shadow-[inset_2px_0_0_var(--accent)]' : 'text-muted hover:bg-sunken hover:text-ink'
+  )
+}
+
+function FileRow({ node, active, depth }: { node: DocTreeFile; active: boolean; depth: number }): React.JSX.Element {
+  const ref = useScrollIntoView<HTMLAnchorElement>(active)
   return (
     <Link
       ref={ref}
@@ -107,14 +100,63 @@ function FileRow({ node, active, depth }: { node: DocTreeFile; active: boolean; 
       params={{ _splat: node.path }}
       title={node.path}
       style={{ paddingLeft: 6 + depth * INDENT_PX + CHEVRON_PX }}
-      className={cn(
-        'flex h-7 items-center gap-1.5 rounded pr-2 text-[12.5px]',
-        active ? 'bg-surface font-medium text-ink shadow-[inset_2px_0_0_var(--accent)]' : 'text-muted hover:bg-sunken hover:text-ink'
-      )}
+      className={cn(rowClass(active), 'pr-2')}
     >
       <FileText className={cn('size-3.5 shrink-0', active ? 'text-accent' : 'text-faint')} />
       <span className="truncate">{node.title}</span>
     </Link>
+  )
+}
+
+function folderLabel(node: DocTreeFolder): string {
+  return node.group ? groupLabel(node.name) : SECTION_LABELS[node.section]
+}
+
+function folderIcon(node: DocTreeFolder, open: boolean): LucideIcon {
+  if (!node.group) return SECTION_ICONS[node.section]
+  // Feature groups get the same icons as in the classic Library; deeper folders are plain folders.
+  if (!node.group.includes('/')) return groupIcon(node.group)
+  return open ? FolderOpen : Folder
+}
+
+interface FolderRowProps {
+  node: DocTreeFolder
+  open: boolean
+  active: boolean
+  depth: number
+  onOpenChange: (open: boolean) => void
+}
+
+/** Clicking the name shows the folder (diagram, subfolders, documents) and opens it; the chevron only opens or closes it. */
+function FolderRow({ node, open, active, depth, onOpenChange }: FolderRowProps): React.JSX.Element {
+  const ref = useScrollIntoView<HTMLDivElement>(active)
+  const label = folderLabel(node)
+  return (
+    <div ref={ref} style={{ paddingLeft: 6 + depth * INDENT_PX }} className={cn(rowClass(active), !node.group && 'font-semibold text-ink')}>
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => onOpenChange(!open)}
+        aria-label={`${open ? 'Collapse' : 'Expand'} ${label}`}
+        className="-ml-1 -mr-0.5 grid size-5 shrink-0 place-items-center rounded text-faint hover:bg-sunken hover:text-ink"
+      >
+        <ChevronRight className={cn('size-3.5 transition-transform', open && 'rotate-90')} />
+      </button>
+      <Link
+        role="treeitem"
+        aria-expanded={open}
+        aria-current={active ? 'page' : undefined}
+        to="/library/folder"
+        search={{ section: node.section, group: node.group }}
+        onClick={() => onOpenChange(active ? !open : true)}
+        title={node.group || SECTION_LABELS[node.section]}
+        className="flex h-full min-w-0 flex-1 items-center gap-1.5 pr-2"
+      >
+        {createElement(folderIcon(node, open), { className: cn('size-3.5 shrink-0', active ? 'text-accent' : 'text-faint') })}
+        <span className="flex-1 truncate">{label}</span>
+        <span className="text-[11px] font-normal text-faint tabular-nums">{node.count}</span>
+      </Link>
+    </div>
   )
 }
 
@@ -124,39 +166,27 @@ interface TreeProps {
   expanded: Set<string>
   /** While filtering every folder is shown open. */
   expandAll: boolean
-  activePath: string | null
-  onToggle: (folder: string) => void
+  /** The open document's path or the open folder's id. */
+  activeId: string | null
+  onOpenChange: (folder: string, open: boolean) => void
 }
 
-function Tree({ nodes, depth, expanded, expandAll, activePath, onToggle }: TreeProps): React.JSX.Element {
+function Tree({ nodes, depth, expanded, expandAll, activeId, onOpenChange }: TreeProps): React.JSX.Element {
   return (
     <ul role={depth === 0 ? 'tree' : 'group'} aria-label={depth === 0 ? 'Workspace documents' : undefined}>
       {nodes.map((node) => {
         if (node.kind === 'file') {
           return (
-            <li key={node.path} role="none">
-              <FileRow node={node} active={node.path === activePath} depth={depth} />
+            <li key={node.id} role="none">
+              <FileRow node={node} active={node.id === activeId} depth={depth} />
             </li>
           )
         }
-        const open = expandAll || expanded.has(node.path)
-        const Icon = open ? FolderOpen : Folder
+        const open = expandAll || expanded.has(node.id)
         return (
-          <li key={node.path} role="none">
-            <button
-              type="button"
-              role="treeitem"
-              aria-expanded={open}
-              onClick={() => onToggle(node.path)}
-              title={node.path}
-              style={{ paddingLeft: 6 + depth * INDENT_PX }}
-              className="flex h-7 w-full items-center gap-1.5 rounded pr-2 text-left text-[12.5px] text-muted hover:bg-sunken hover:text-ink"
-            >
-              <ChevronRight className={cn('size-3.5 shrink-0 text-faint transition-transform', open && 'rotate-90')} />
-              <Icon className="size-3.5 shrink-0 text-faint" />
-              <span className="truncate">{node.name}</span>
-            </button>
-            {open ? <Tree nodes={node.children} depth={depth + 1} expanded={expanded} expandAll={expandAll} activePath={activePath} onToggle={onToggle} /> : null}
+          <li key={node.id} role="none">
+            <FolderRow node={node} open={open} active={node.id === activeId} depth={depth} onOpenChange={(next) => onOpenChange(node.id, next)} />
+            {open ? <Tree nodes={node.children} depth={depth + 1} expanded={expanded} expandAll={expandAll} activeId={activeId} onOpenChange={onOpenChange} /> : null}
           </li>
         )
       })}
@@ -170,11 +200,15 @@ interface ExplorerPanelProps {
   activePath: string | null
 }
 
-/** Quick filter over a folder tree of every document in the workspace. */
+/** Quick filter over the workspace's documents, organised by section and feature group like the classic Library. */
 function ExplorerPanel({ workspace, docs, activePath }: ExplorerPanelProps): React.JSX.Element {
   const [query, setQuery] = useState('')
-  const [expanded, toggle] = useExpandedFolders(workspace.id, activePath)
-  const tree = useMemo(() => buildDocTree(docs ?? []), [docs])
+  const folder = useMatch({ from: '/library/folder', shouldThrow: false })?.search
+  const activeDoc = activePath ? docs?.find((doc) => doc.path === activePath) : undefined
+  const activeId = activePath ?? (folder ? folderId(folder.section, folder.group) : null)
+  const reveal = activeDoc ? folderTrail(activeDoc.section, activeDoc.group) : folder ? folderTrail(folder.section, folder.group).slice(0, -1) : []
+  const [expanded, setOpen] = useExpandedFolders(workspace.id, reveal)
+  const tree = useMemo(() => buildDocTree(docs ?? [], SECTION_ORDER), [docs])
   const visible = useMemo(() => filterDocTree(tree, query), [tree, query])
 
   return (
@@ -200,59 +234,12 @@ function ExplorerPanel({ workspace, docs, activePath }: ExplorerPanelProps): Rea
             <Spinner />
           </div>
         ) : visible.length ? (
-          <Tree nodes={visible} depth={0} expanded={expanded} expandAll={query.trim() !== ''} activePath={activePath} onToggle={toggle} />
+          <Tree nodes={visible} depth={0} expanded={expanded} expandAll={query.trim() !== ''} activeId={activeId} onOpenChange={setOpen} />
         ) : (
           <p className="px-3 py-2 text-[12.5px] text-muted">{query ? 'No documents match.' : 'This workspace has no Markdown files yet.'}</p>
         )}
       </nav>
     </>
-  )
-}
-
-interface TabBarProps {
-  tabs: string[]
-  titles: Map<string, string>
-  activePath: string | null
-  onClose: (path: string) => void
-}
-
-function TabBar({ tabs, titles, activePath, onClose }: TabBarProps): React.JSX.Element {
-  return (
-    <div role="tablist" aria-label="Open documents" className="flex shrink-0 overflow-x-auto border-b border-line bg-canvas">
-      {tabs.map((path) => {
-        const active = path === activePath
-        const title = titles.get(path) ?? path.split('/').pop() ?? path
-        return (
-          <div
-            key={path}
-            onAuxClick={(event) => {
-              if (event.button === 1) onClose(path)
-            }}
-            className={cn(
-              'group flex h-9 max-w-56 shrink-0 items-center gap-1.5 border-r border-line pl-3 pr-1 text-[12.5px]',
-              active ? 'bg-surface text-ink shadow-[inset_0_2px_0_var(--accent)]' : 'text-muted hover:bg-sunken hover:text-ink'
-            )}
-          >
-            <Link role="tab" aria-selected={active} to="/library/doc/$" params={{ _splat: path }} title={path} className="flex min-w-0 items-center gap-1.5">
-              <FileText className={cn('size-3.5 shrink-0', active ? 'text-accent' : 'text-faint')} />
-              <span className="truncate">{title}</span>
-            </Link>
-            <button
-              type="button"
-              onClick={() => onClose(path)}
-              aria-label={`Close ${title}`}
-              title="Close (middle-click)"
-              className={cn(
-                'grid size-5 shrink-0 place-items-center rounded text-faint hover:bg-sunken hover:text-ink',
-                !active && 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100'
-              )}
-            >
-              <X className="size-3" />
-            </button>
-          </div>
-        )
-      })}
-    </div>
   )
 }
 
@@ -265,7 +252,7 @@ export function ExplorerShell({ workspace }: { workspace: Workspace }): React.JS
   const [collapsed, toggleCollapsed] = useSidebarCollapsed()
   const panel = usePanelWidth({ key: 'qa-hub.width.explorer', initial: 272, min: 200, max: 520 })
   const activePath = useMatch({ from: '/library/doc/$', shouldThrow: false })?.params._splat ?? null
-  const { tabs, close } = useDocTabs(workspace.id, activePath, docs)
+  const docTabs = useDocTabs(workspace.id, activePath, docs)
   const titles = useMemo(() => new Map((docs ?? []).map((doc) => [doc.path, doc.title])), [docs])
 
   const activeRuns = (runs.data ?? []).filter((run) => run.status === 'running' || run.status === 'ready').length
@@ -309,7 +296,7 @@ export function ExplorerShell({ workspace }: { workspace: Workspace }): React.JS
         </>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        {tabs.length ? <TabBar tabs={tabs} titles={titles} activePath={activePath} onClose={(path) => void close(path)} /> : null}
+        {docTabs.tabs.length ? <TabBar state={docTabs} titles={titles} activePath={activePath} /> : null}
         <main className="min-h-0 flex-1 overflow-hidden">
           <Outlet />
         </main>

@@ -2,6 +2,7 @@ import { createHashHistory, createRootRoute, createRoute, createRouter } from '@
 import { AppShell } from '@/components/app-shell'
 import { CodebasesPage } from '@/features/codebases/codebases-page'
 import { DocPage } from '@/features/library/doc-page'
+import { FolderPage } from '@/features/library/folder-page'
 import { LibraryPage } from '@/features/library/library-page'
 import { SearchPage } from '@/features/library/search-page'
 import { OverviewPage } from '@/features/overview/overview-page'
@@ -32,6 +33,27 @@ const libraryRoute = createRoute({
   component: LibraryPage
 })
 
+export interface FolderSearch {
+  section: DocSection
+  /** Feature group path inside the section; empty for the section itself. */
+  group: string
+  view?: 'documents' | 'diagram'
+}
+
+const SECTIONS: readonly DocSection[] = ['test-cases', 'assets', 'releases', 'test-runs', 'guides']
+
+/** One explorer folder (a section or feature group): its workflow diagram, subfolders and documents. */
+export const folderRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/folder',
+  validateSearch: (search: Record<string, unknown>): FolderSearch => ({
+    section: SECTIONS.find((section) => section === search.section) ?? 'test-cases',
+    group: typeof search.group === 'string' ? search.group : '',
+    view: search.view === 'diagram' || search.view === 'documents' ? search.view : undefined
+  }),
+  component: FolderPage
+})
+
 export const docRoute = createRoute({ getParentRoute: () => rootRoute, path: '/library/doc/$', component: DocPage })
 
 export const searchRoute = createRoute({
@@ -51,6 +73,7 @@ export { libraryRoute }
 const routeTree = rootRoute.addChildren([
   overviewRoute,
   libraryRoute,
+  folderRoute,
   docRoute,
   searchRoute,
   runsRoute,
