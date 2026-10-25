@@ -1,5 +1,5 @@
 import os from 'node:os'
-import type { GithubSettings, ProviderId, Settings, ThemePreference } from '@shared/domain'
+import type { GithubSettings, LayoutPreference, ProviderId, Settings, ThemePreference } from '@shared/domain'
 import type { Db } from '../../db/connection'
 import { UserError } from '../../errors'
 import { parseJson } from '../util'
@@ -15,6 +15,7 @@ interface StoredSettings {
   defaultProvider: ProviderId
   claudeModel: string
   theme: ThemePreference
+  layout: LayoutPreference
   displayName: string
   github: GithubSettings
 }
@@ -28,6 +29,7 @@ function defaults(): StoredSettings {
     defaultProvider: 'copilot',
     claudeModel: 'claude-opus-5-5',
     theme: 'system',
+    layout: 'classic',
     displayName: safeUsername(),
     // Configuration, not constants: the GitHub phase reads these instead of hard-coded names.
     github: { org: 'omniaintranet', sourceRepo: 'OmniaMono', qaRepo: 'qa-regression-management' }
@@ -67,6 +69,7 @@ export function createSettingsService(db: Db, cipher: SecretCipher): SettingsSer
       defaultProvider: parseJson(read('defaultProvider'), base.defaultProvider),
       claudeModel: parseJson(read('claudeModel'), base.claudeModel),
       theme: parseJson(read('theme'), base.theme),
+      layout: parseJson(read('layout'), base.layout),
       displayName: parseJson(read('displayName'), base.displayName),
       github: { ...base.github, ...parseJson<Partial<GithubSettings>>(read('github'), {}) }
     }

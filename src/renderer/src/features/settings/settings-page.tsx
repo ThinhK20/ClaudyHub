@@ -219,6 +219,14 @@ function GeneralSection({ settings }: { settings: Settings }): React.JSX.Element
             </Select>
           )}
         </Field>
+        <Field label="Layout" hint="Explorer shows every document in a folder tree and opens them as tabs.">
+          {(id) => (
+            <Select id={id} className="w-48" value={settings.layout} onChange={(event) => void save({ layout: event.target.value as Settings['layout'] })}>
+              <option value="classic">Classic</option>
+              <option value="explorer">Explorer with tabs</option>
+            </Select>
+          )}
+        </Field>
       </Section>
       <Section title="Profile" description="How you are named when results are shared through GitHub publishing (coming next).">
         <Field label="Display name">

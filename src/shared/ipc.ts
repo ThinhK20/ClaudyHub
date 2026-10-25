@@ -131,6 +131,7 @@ export const ipcInputs = {
     defaultProvider: providerIdSchema.optional(),
     claudeModel: z.string().min(1).max(100).optional(),
     theme: z.enum(['system', 'light', 'dark']).optional(),
+    layout: z.enum(['classic', 'explorer']).optional(),
     displayName: z.string().min(1).max(120).optional(),
     github: z
       .object({ org: z.string().max(100), sourceRepo: z.string().max(100), qaRepo: z.string().max(100) })

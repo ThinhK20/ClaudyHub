@@ -1,86 +1,14 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
 import { Bot, FlaskConical, FolderGit2, LayoutGrid, Library, PanelLeftClose, PanelLeftOpen, Search, Settings } from 'lucide-react'
+import type { Workspace } from '@shared/domain'
 import { OnboardingPage } from '@/features/onboarding/onboarding'
-import { useBootstrap, useCodebases, useRuns } from '@/lib/queries'
+import { useBootstrap, useCodebases, useRuns, useSettings } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { CommandPalette } from './command-palette'
+import { ExplorerShell } from './explorer-shell'
+import { NavItem, useSidebarCollapsed } from './shell-parts'
 import { ErrorNotice, Kbd, Spinner } from './ui/misc'
-
-interface NavItemProps {
-  to: '/' | '/library' | '/runs' | '/codebases' | '/settings'
-  label: string
-  icon: ComponentType<{ className?: string }>
-  count?: number
-  exact?: boolean
-  collapsed: boolean
-}
-
-function NavItem({ to, label, icon: Icon, count, exact, collapsed }: NavItemProps): React.JSX.Element {
-  return (
-    <Link
-      to={to}
-      activeOptions={{ exact }}
-      title={collapsed ? (count ? `${label} (${count})` : label) : undefined}
-      aria-label={collapsed ? label : undefined}
-      className={cn(
-        'group relative flex h-8 items-center gap-2.5 rounded-md text-[13px] text-muted hover:bg-sunken hover:text-ink',
-        collapsed ? 'justify-center' : 'px-2.5'
-      )}
-      activeProps={{ className: 'bg-surface text-ink font-medium shadow-[inset_2px_0_0_var(--accent)]' }}
-    >
-      <Icon className="size-4 shrink-0" />
-      {collapsed ? (
-        count ? <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent" /> : null
-      ) : (
-        <>
-          <span className="flex-1 truncate">{label}</span>
-          {count ? <span className="text-[11.5px] text-faint">{count}</span> : null}
-        </>
-      )}
-    </Link>
-  )
-}
-
-const COLLAPSED_KEY = 'qa-hub.sidebar.collapsed'
-
-function readCollapsed(): boolean {
-  try {
-    return localStorage.getItem(COLLAPSED_KEY) === 'true'
-  } catch {
-    return false
-  }
-}
-
-/** Sidebar collapse state, remembered across launches and toggled with Ctrl+B. */
-function useSidebarCollapsed(): [boolean, () => void] {
-  const [collapsed, setCollapsed] = useState(readCollapsed)
-
-  const toggle = (): void =>
-    setCollapsed((current) => {
-      try {
-        localStorage.setItem(COLLAPSED_KEY, String(!current))
-      } catch {
-        // Storage is a convenience; the toggle still applies for this session.
-      }
-      return !current
-    })
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      // Inside editable text Ctrl+B means bold, so leave it to the editor.
-      if (event.target instanceof HTMLElement && event.target.isContentEditable) return
-      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'b') {
-        event.preventDefault()
-        toggle()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
-
-  return [collapsed, toggle]
-}
 
 const PEEK_OPEN_MS = 120
 const PEEK_CLOSE_MS = 200
@@ -124,31 +52,14 @@ function useSidebarPeek(collapsed: boolean): {
   }
 }
 
-/** Window chrome: sidebar navigation around the routed page. Shows onboarding until a workspace is chosen. */
-export function AppShell(): React.JSX.Element {
-  const bootstrap = useBootstrap()
+/** Classic layout: sidebar navigation around the routed page. */
+function ClassicShell({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const runs = useRuns()
   const codebases = useCodebases().data ?? []
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [collapsed, toggleCollapsed] = useSidebarCollapsed()
   const peek = useSidebarPeek(collapsed)
   const compact = collapsed && !peek.peeking
-
-  if (bootstrap.isPending) {
-    return (
-      <div className="grid h-full place-items-center">
-        <Spinner />
-      </div>
-    )
-  }
-  if (bootstrap.error) {
-    return (
-      <div className="p-8">
-        <ErrorNotice error={bootstrap.error} />
-      </div>
-    )
-  }
-  if (!bootstrap.data.workspace) return <OnboardingPage />
 
   const activeRuns = (runs.data ?? []).filter((run) => run.status === 'running' || run.status === 'ready').length
   const defaultCodebase = codebases.find((codebase) => codebase.isDefault)
@@ -170,8 +81,8 @@ export function AppShell(): React.JSX.Element {
             {compact ? null : (
               <div className="min-w-0 flex-1">
                 <div className="font-display text-[15px] font-semibold tracking-tight">QA Hub</div>
-                <div className="truncate text-[12px] text-muted" title={bootstrap.data.workspace.path}>
-                  {bootstrap.data.workspace.name}
+                <div className="truncate text-[12px] text-muted" title={workspace.path}>
+                  {workspace.name}
                 </div>
               </div>
             )}
@@ -242,4 +153,31 @@ export function AppShell(): React.JSX.Element {
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   )
+}
+
+/** Window chrome around the routed page, in the layout chosen in Settings. Shows onboarding until a workspace is chosen. */
+export function AppShell(): React.JSX.Element {
+  const bootstrap = useBootstrap()
+  const settings = useSettings()
+
+  if (bootstrap.isPending) {
+    return (
+      <div className="grid h-full place-items-center">
+        <Spinner />
+      </div>
+    )
+  }
+  if (bootstrap.error) {
+    return (
+      <div className="p-8">
+        <ErrorNotice error={bootstrap.error} />
+      </div>
+    )
+  }
+  const workspace = bootstrap.data.workspace
+  if (!workspace) return <OnboardingPage />
+
+  const layout = (settings.data ?? bootstrap.data.settings).layout
+  // Keyed by workspace so tabs and expanded folders reload when switching workspaces.
+  return layout === 'explorer' ? <ExplorerShell key={workspace.id} workspace={workspace} /> : <ClassicShell workspace={workspace} />
 }

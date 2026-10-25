@@ -101,11 +101,17 @@ describe('codebase service', () => {
 describe('settings service', () => {
   it('returns defaults and persists partial updates', () => {
     const service = createSettingsService(memoryDb(), fakeCipher)
-    expect(service.get()).toMatchObject({ defaultProvider: 'copilot', claudeModel: 'claude-opus-5-5', theme: 'system', hasClaudeApiKey: false })
+    expect(service.get()).toMatchObject({ defaultProvider: 'copilot', claudeModel: 'claude-opus-5-5', theme: 'system', layout: 'classic', hasClaudeApiKey: false })
     const updated = service.update({ theme: 'dark', github: { org: 'acme', sourceRepo: 'app', qaRepo: 'qa' } })
     expect(updated.theme).toBe('dark')
     expect(updated.github).toEqual({ org: 'acme', sourceRepo: 'app', qaRepo: 'qa' })
     expect(updated.defaultProvider).toBe('copilot')
+  })
+
+  it('persists the layout preference', () => {
+    const db = memoryDb()
+    createSettingsService(db, fakeCipher).update({ layout: 'explorer' })
+    expect(createSettingsService(db, fakeCipher).get().layout).toBe('explorer')
   })
 
   it('stores the API key encrypted and never returns it in settings', () => {

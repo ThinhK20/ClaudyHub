@@ -8,6 +8,9 @@ export type ProviderId = 'copilot' | 'claude'
 export type ChatThread = 'ask' | 'assistant'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
+/** Classic: sidebar navigation with the grouped Library. Explorer: a file tree of the workspace with documents opened as tabs. */
+export type LayoutPreference = 'classic' | 'explorer'
+
 export interface Workspace {
   id: string
   name: string
@@ -159,6 +162,7 @@ export interface Settings {
   defaultProvider: ProviderId
   claudeModel: string
   theme: ThemePreference
+  layout: LayoutPreference
   displayName: string
   github: GithubSettings
   hasClaudeApiKey: boolean

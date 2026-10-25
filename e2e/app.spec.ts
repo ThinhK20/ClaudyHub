@@ -229,6 +229,32 @@ test('AI Replace keeps the structure around the selection', async () => {
   await page.getByRole('button', { name: 'Discard changes' }).click()
 })
 
+test('the explorer layout opens documents from the folder tree as tabs', async () => {
+  await page.getByRole('link', { name: 'Settings' }).click()
+  await page.getByLabel('Layout').selectOption('explorer')
+
+  const tree = page.getByRole('tree', { name: 'Workspace documents' })
+  await tree.getByRole('treeitem', { name: 'qa', exact: true }).click()
+  await tree.getByRole('treeitem', { name: 'regression-assets' }).click()
+  await tree.getByRole('treeitem', { name: 'forms' }).click()
+  await tree.getByRole('treeitem', { name: 'Form checklist' }).click()
+  await expect(page.getByRole('heading', { name: 'Form checklist', level: 1 }).first()).toBeVisible()
+
+  await page.getByLabel('Filter documents').first().fill('reject')
+  await tree.getByRole('treeitem', { name: 'Reject invalid settings' }).click()
+  const tabs = page.getByRole('tablist', { name: 'Open documents' })
+  await expect(tabs.getByRole('tab')).toHaveText(['Form checklist', 'Reject invalid settings'])
+  await expect(tree.getByRole('treeitem', { name: 'test-cases' })).toHaveAttribute('aria-expanded', 'true')
+
+  await page.getByRole('button', { name: 'Close Reject invalid settings' }).click()
+  await expect(page.getByRole('heading', { name: 'Form checklist', level: 1 }).first()).toBeVisible()
+  await expect(tabs.getByRole('tab')).toHaveText(['Form checklist'])
+
+  await page.getByRole('link', { name: 'Settings' }).click()
+  await page.getByLabel('Layout').selectOption('classic')
+  await expect(page.getByRole('tree', { name: 'Workspace documents' })).toBeHidden()
+})
+
 test('a run goes from AI-drafted cases to a completed verdict with evidence', async () => {
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Test runs' }).click()
   await page.getByRole('button', { name: 'New run' }).first().click()
