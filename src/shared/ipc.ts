@@ -125,6 +125,8 @@ export const ipcInputs = {
     document: z.string().max(LIMITS.docBody),
     selection: z.string().max(LIMITS.aiSelection),
     inline: z.boolean(),
+    /** The request is about the whole document rather than a selection; the answer replaces all of it. */
+    wholeDocument: z.boolean().optional(),
     prompt: z.string().trim().min(1).max(LIMITS.aiPrompt),
     previous: z.string().max(LIMITS.aiSelection).nullable()
   }),

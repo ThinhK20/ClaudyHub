@@ -14,6 +14,8 @@ export interface CapturedSelection {
   code: boolean
   /** False for an empty selection or several table cells, which can only be inserted below. */
   replaceable: boolean
+  /** The request is about the whole document, not a selection: Replace swaps out all of it. */
+  wholeDocument?: boolean
 }
 
 export interface TrackedTarget {
@@ -37,6 +39,12 @@ export function captureSelection(editor: Editor): CapturedSelection {
   // Across blocks, widen to whole paragraphs at both ends so replacing never leaves split-off fragments.
   const range = { from: $from.parent.isTextblock ? $from.before() : from, to: $to.parent.isTextblock ? $to.after() : to }
   return { ...range, markdown: editorSelectionMarkdown(editor, range), inline: false, code: false, replaceable: true }
+}
+
+/** The whole document as the AI target, whatever is selected. */
+export function captureDocument(editor: Editor): CapturedSelection {
+  const markdown = editor.getMarkdown()
+  return { from: 0, to: editor.state.doc.content.size, markdown, inline: false, code: false, replaceable: markdown.trim().length > 0, wholeDocument: true }
 }
 
 /** Follows a range through later edits, so a result still lands where the user asked even if they kept typing. */

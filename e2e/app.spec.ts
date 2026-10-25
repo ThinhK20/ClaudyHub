@@ -176,6 +176,44 @@ test('the AI assistant shows a result and applies it only on Replace', async () 
   await expect(page.getByText('Validation works')).toBeVisible()
 })
 
+test('the toolbar AI assistant works on the whole document and the panel can be dragged', async () => {
+  const editor = page.getByLabel('Document content')
+  const panel = page.getByRole('dialog', { name: 'AI assistant' })
+
+  await page.getByRole('button', { name: 'Edit' }).click()
+  await expect(editor).toContainText('Validation works')
+  await page.getByRole('button', { name: 'AI assistant (whole document)' }).click()
+  await expect(panel).toContainText('Whole document')
+
+  // Opens centered in the window.
+  const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
+  const box = await panel.boundingBox()
+  expect(Math.abs(box!.x + box!.width / 2 - viewport.width / 2)).toBeLessThan(2)
+  expect(Math.abs(box!.y + box!.height / 2 - viewport.height / 2)).toBeLessThan(2)
+
+  // Dragging the header moves it.
+  const handle = await panel.getByTestId('ai-panel-handle').boundingBox()
+  await page.mouse.move(handle!.x + 200, handle!.y + handle!.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle!.x + 120, handle!.y + handle!.height / 2 - 60, { steps: 5 })
+  await page.mouse.up()
+  const moved = await panel.boundingBox()
+  expect(moved!.x).toBeCloseTo(box!.x - 80, 0)
+  expect(moved!.y).toBeCloseTo(box!.y - 60, 0)
+
+  // Replace swaps out the whole document.
+  await panel.getByLabel('AI request').fill('rewrite everything')
+  await panel.getByLabel('AI request').press('Enter')
+  await expect(panel.getByTestId('ai-result')).toContainText('Stub edit: rewrite everything')
+  await panel.getByRole('button', { name: 'Replace document' }).click()
+  await expect(panel).toBeHidden()
+  await expect(editor).toHaveText('Stub edit: rewrite everything')
+
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await page.getByRole('button', { name: 'Discard changes' }).click()
+  await expect(page.getByText('Validation works')).toBeVisible()
+})
+
 test('AI Replace keeps the structure around the selection', async () => {
   const editor = page.getByLabel('Document content')
   const panel = page.getByRole('dialog', { name: 'AI assistant' })

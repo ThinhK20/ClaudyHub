@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { ArrowUp, RotateCw, Sparkles, Square, X } from 'lucide-react'
 import type { AiUsage, ProviderId } from '@shared/domain'
@@ -11,6 +11,7 @@ import { cn, errorText } from '@/lib/utils'
 import type { CapturedSelection } from './apply-proposal'
 import type { AiRequest } from './shortcuts'
 import type { AiEngine } from './use-ai-engine'
+import { useDragOffset } from './use-drag-offset'
 
 const PANEL_WIDTH = 520
 const PANEL_GAP = 8
@@ -39,8 +40,9 @@ interface RunInput {
   previous: string | null
 }
 
-/** Below the selection when there is room, otherwise above it; always inside the window. */
+/** Centered for a whole-document request; otherwise below the selection when there is room, else above it; always inside the window. */
 function panelPosition(editor: Editor, selection: CapturedSelection): React.CSSProperties {
+  if (selection.wholeDocument) return { left: '50%', top: '50%' }
   const start = editor.view.coordsAtPos(Math.min(selection.from, editor.state.doc.content.size))
   const end = editor.view.coordsAtPos(Math.min(selection.to, editor.state.doc.content.size))
   const left = Math.max(VIEWPORT_MARGIN, Math.min(start.left, window.innerWidth - PANEL_WIDTH - VIEWPORT_MARGIN))
@@ -112,7 +114,11 @@ function AiProgress({ status, streamed }: { status: string; streamed: string }):
 /** Floating AI assistant: asks for a change, shows the proposal, and applies it only when the user chooses to. */
 export function AiPanel({ editor, docPath, engine, request, selection, onApply, onClose }: AiPanelProps): React.JSX.Element {
   const job = useAiJob()
+  const panelRef = useRef<HTMLDivElement>(null)
+  const drag = useDragOffset(panelRef)
   const [position] = useState(() => panelPosition(editor, selection))
+  const centering = selection.wholeDocument ? '-50%' : '0px'
+  const transform = `translate(calc(${centering} + ${drag.offset.x}px), calc(${centering} + ${drag.offset.y}px))`
   const [prompt, setPrompt] = useState(request.prompt)
   const [proposal, setProposal] = useState<Proposal | null>(null)
   const [lastRun, setLastRun] = useState<RunInput | null>(null)
@@ -132,8 +138,10 @@ export function AiPanel({ editor, docPath, engine, request, selection, onApply, 
           provider,
           docPath,
           document: editor.getMarkdown(),
-          selection: selection.markdown,
+          // The document is already sent in full, so a whole-document request has no separate selection.
+          selection: selection.wholeDocument ? '' : selection.markdown,
           inline: selection.inline,
+          wholeDocument: selection.wholeDocument,
           prompt: input.prompt,
           previous: input.previous
         })
@@ -162,17 +170,24 @@ export function AiPanel({ editor, docPath, engine, request, selection, onApply, 
 
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-label="AI assistant"
       className="fixed z-40 flex max-h-[min(640px,calc(100vh-32px))] flex-col gap-3 rounded-lg border border-line bg-surface p-3 shadow-xl"
-      style={{ ...position, width: PANEL_WIDTH }}
+      style={{ ...position, width: PANEL_WIDTH, transform }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose()
       }}
     >
-      <div className="flex items-center gap-2">
+      <div
+        {...drag.handleProps}
+        title="Drag to move"
+        data-testid="ai-panel-handle"
+        className={cn('-m-1 flex touch-none items-center gap-2 rounded p-1 select-none', drag.dragging ? 'cursor-grabbing' : 'cursor-grab')}
+      >
         <Sparkles className="size-4 text-accent" />
         <span className="text-[13px] font-semibold">AI assistant</span>
+        {selection.wholeDocument ? <span className="rounded bg-sunken px-1.5 py-0.5 text-[11px] text-muted">Whole document</span> : null}
         <button
           type="button"
           onClick={onClose}
@@ -296,7 +311,7 @@ export function AiPanel({ editor, docPath, engine, request, selection, onApply, 
           </Button>
           {canReplace ? (
             <Button size="sm" variant="primary" onClick={() => onApply(proposal.text, 'replace')}>
-              Replace
+              {selection.wholeDocument ? 'Replace document' : 'Replace'}
             </Button>
           ) : null}
         </div>

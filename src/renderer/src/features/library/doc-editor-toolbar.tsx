@@ -18,6 +18,7 @@ import {
   Quote,
   Redo2,
   RemoveFormatting,
+  Sparkles,
   Strikethrough,
   Table,
   Undo2
@@ -193,8 +194,14 @@ function TableMenu({ editor, inTable }: { editor: Editor; inTable: boolean }): R
   )
 }
 
+interface EditorToolbarProps {
+  editor: Editor
+  /** Opens the AI assistant on the whole document. */
+  onAskAi?: () => void
+}
+
 /** Formatting toolbar for the document editor. Only offers what Markdown can store, so nothing is lost on save. */
-export function EditorToolbar({ editor }: { editor: Editor }): React.JSX.Element {
+export function EditorToolbar({ editor, onAskAi }: EditorToolbarProps): React.JSX.Element {
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -279,6 +286,14 @@ export function EditorToolbar({ editor }: { editor: Editor }): React.JSX.Element
       <ToolButton label="Redo" shortcut="Ctrl+Y" disabled={!state.canRedo} onClick={() => chain().redo().run()}>
         <Redo2 />
       </ToolButton>
+      {onAskAi ? (
+        <>
+          <Divider />
+          <ToolButton label="AI assistant (whole document)" onClick={onAskAi}>
+            <Sparkles className="text-accent" />
+          </ToolButton>
+        </>
+      ) : null}
     </div>
   )
 }

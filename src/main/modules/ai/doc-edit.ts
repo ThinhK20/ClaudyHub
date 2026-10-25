@@ -40,10 +40,16 @@ function frontmatterText(frontmatter: Record<string, unknown>): string {
 }
 
 export function docEditPrompt(input: DocEditInput, frontmatter: Record<string, unknown>): string {
+  // A whole-document answer replaces everything, so the AI must see everything: no trimmed window.
+  if (input.wholeDocument && input.document.length > DOCUMENT_WINDOW) {
+    throw new UserError('This document is too long for the AI assistant to work on at once. Select a part of it and use the right-click menu instead.')
+  }
   const { text, trimmed } = documentWindow(input.document, input.selection)
-  const hasSelection = input.selection.trim().length > 0
+  const hasSelection = !input.wholeDocument && input.selection.trim().length > 0
   const meta = frontmatterText(frontmatter)
-  const task = !hasSelection
+  const task = input.wholeDocument
+    ? 'The request is about the whole document. Return the complete revised document body (without frontmatter).'
+    : !hasSelection
     ? 'Nothing is selected. Write new content to insert at the cursor position in the document.'
     : input.inline
       ? 'The selection is part of a single paragraph, list item or table cell. Return inline text only (one paragraph, no headings, lists or tables) to put in place of the selected text.'

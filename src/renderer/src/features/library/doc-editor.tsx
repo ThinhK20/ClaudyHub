@@ -1,12 +1,14 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { toast } from 'sonner'
 import { TextContextMenu, type TextMenuActions } from '@/components/text-context-menu'
 import { Spinner } from '@/components/ui/misc'
+import { errorText } from '@/lib/utils'
 import { AiMenu } from './ai/ai-menu'
 import { AiPanel } from './ai/ai-panel'
-import { applyProposal, captureSelection, trackRange, type CapturedSelection } from './ai/apply-proposal'
-import type { AiRequest } from './ai/shortcuts'
+import { applyProposal, captureDocument, captureSelection, trackRange, type CapturedSelection } from './ai/apply-proposal'
+import { ASK_AI, type AiRequest } from './ai/shortcuts'
 import { useAiEngine } from './ai/use-ai-engine'
 import { EditorToolbar } from './doc-editor-toolbar'
 import { docExtensions } from './editor-extensions'
@@ -104,9 +106,9 @@ export default function DocEditor({ markdown, docPath, onDirtyChange, ref }: Doc
   const tracker = useRef<ReturnType<typeof trackRange> | null>(null)
   useEffect(() => () => tracker.current?.dispose(), [])
 
-  const openAi = (request: AiRequest): void => {
+  const openAi = (request: AiRequest, scope: 'selection' | 'document' = 'selection'): void => {
     if (!editor) return
-    const selection = captureSelection(editor)
+    const selection = scope === 'document' ? captureDocument(editor) : captureSelection(editor)
     tracker.current?.dispose()
     tracker.current = trackRange(editor, selection)
     setAi({ id: Date.now(), request, selection })
@@ -117,7 +119,16 @@ export default function DocEditor({ markdown, docPath, onDirtyChange, ref }: Doc
     setAi(null)
   }
   const applyAi = (markdown: string, mode: 'insert' | 'replace'): void => {
-    if (editor && ai && tracker.current) applyProposal(editor, markdown, { ...tracker.current.current(), inline: ai.selection.inline, code: ai.selection.code }, mode)
+    if (editor && ai && tracker.current) {
+      try {
+        applyProposal(editor, markdown, { ...tracker.current.current(), inline: ai.selection.inline, code: ai.selection.code }, mode)
+      } catch (error) {
+        // Keep the panel open so the result is not lost, and say why nothing changed.
+        console.error('[ai] applying the result failed', error)
+        toast.error(`Could not apply the AI result: ${errorText(error)}`)
+        return
+      }
+    }
     closeAi()
   }
 
@@ -126,7 +137,7 @@ export default function DocEditor({ markdown, docPath, onDirtyChange, ref }: Doc
   return (
     <div className="flex min-h-full flex-col">
       <div className="sticky top-0 z-20">
-        <EditorToolbar editor={editor} />
+        <EditorToolbar editor={editor} onAskAi={() => openAi(ASK_AI, 'document')} />
       </div>
       <TextContextMenu
         actions={editorMenuActions(editor)}

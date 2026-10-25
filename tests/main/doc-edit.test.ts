@@ -47,6 +47,19 @@ describe('docEditPrompt', () => {
     expect(prompt).toContain('shorter')
   })
 
+  it('whole-document request asks for the complete revised document without a separate selection', () => {
+    const prompt = docEditPrompt(input({ selection: '', wholeDocument: true }), FRONTMATTER)
+    expect(prompt).toContain('- [ ] Submit works')
+    expect(prompt).toMatch(/complete revised document/i)
+    expect(prompt).not.toContain('<selection>')
+    expect(prompt).not.toMatch(/cursor/i)
+  })
+
+  it('whole-document request refuses a document too long to send in full', () => {
+    const document = 'x'.repeat(70_000)
+    expect(() => docEditPrompt(input({ document, selection: '', wholeDocument: true }), FRONTMATTER)).toThrow(/too long/i)
+  })
+
   it('trims a long document around the selection', () => {
     const filler = Array.from({ length: 7000 }, (_, index) => `line ${String(index).padStart(4, '0')}`).join('\n')
     const document = `${filler}\nTHE SELECTED LINE\nend`
