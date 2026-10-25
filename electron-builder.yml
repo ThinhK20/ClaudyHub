@@ -1,0 +1,27 @@
+appId: com.qahub.app
+productName: QA Hub
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+# The Claude Agent SDK spawns its bundled native CLI, which cannot run from inside the asar archive.
+asarUnpack:
+  - node_modules/@anthropic-ai/claude-agent-sdk/**
+  - node_modules/@anthropic-ai/claude-agent-sdk-*/**
+win:
+  target: nsis
+  executableName: qa-hub
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${name}-${version}-setup.${ext}
+mac:
+  target: dmg
+  category: public.app-category.developer-tools
+linux:
+  target: AppImage
+  category: Development
+npmRebuild: false

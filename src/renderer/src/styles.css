@@ -1,0 +1,218 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Instrument grey base, one cobalt accent; verdict colours carry the identity. */
+:root {
+  --canvas: #f4f6f8;
+  --surface: #ffffff;
+  --sunken: #eceff3;
+  --ink: #1a1e26;
+  --muted: #5c6573;
+  --faint: #8b93a0;
+  --line: #dce1e7;
+  --line-strong: #c5ccd5;
+  --accent: #3145d0;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6e9fb;
+  --pass: #1e8a5c;
+  --pass-soft: #e2f3ea;
+  --fail: #cf3b3b;
+  --fail-soft: #fbe6e6;
+  --blocked: #c2850a;
+  --blocked-soft: #faf0d9;
+  --notrun: #a3abb6;
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #15181d;
+  --surface: #1c2027;
+  --sunken: #111418;
+  --ink: #e5e8ed;
+  --muted: #9aa3b0;
+  --faint: #6d7684;
+  --line: #2a3039;
+  --line-strong: #3a424e;
+  --accent: #7d8cff;
+  --accent-ink: #0d1020;
+  --accent-soft: #252b4d;
+  --pass: #43c08a;
+  --pass-soft: #173327;
+  --fail: #f06a6a;
+  --fail-soft: #3a1d1f;
+  --blocked: #e7b04a;
+  --blocked-soft: #3a2f17;
+  --notrun: #5d6673;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-pass: var(--pass);
+  --color-pass-soft: var(--pass-soft);
+  --color-fail: var(--fail);
+  --color-fail-soft: var(--fail-soft);
+  --color-blocked: var(--blocked);
+  --color-blocked-soft: var(--blocked-soft);
+  --color-notrun: var(--notrun);
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  --text-2xs: 0.6875rem;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-size: 13px;
+    line-height: 1.5;
+    font-feature-settings: 'tnum' 1;
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Rendered Markdown (documents and AI answers). */
+.prose-qa {
+  @apply text-[13.5px] leading-relaxed text-ink;
+  max-width: 78ch;
+}
+/* Wide variant (workflow diagrams): diagrams and headings use the full width, running text stays readable. */
+.prose-qa.prose-wide {
+  max-width: none;
+}
+.prose-wide > :is(p, ul, ol, blockquote) {
+  max-width: 78ch;
+}
+.prose-qa > :first-child {
+  margin-top: 0;
+}
+.prose-qa > * + * {
+  margin-top: 0.75em;
+}
+.prose-qa h1 {
+  @apply font-display text-xl font-semibold tracking-tight;
+}
+.prose-qa h2 {
+  @apply font-display mt-7 border-b border-line pb-1 text-[15px] font-semibold;
+}
+.prose-qa h3 {
+  @apply mt-5 text-[13.5px] font-semibold;
+}
+.prose-qa a {
+  @apply text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent;
+}
+.prose-qa ul {
+  @apply list-disc pl-5;
+}
+.prose-qa ol {
+  @apply list-decimal pl-5;
+}
+.prose-qa li + li {
+  margin-top: 0.2em;
+}
+.prose-qa li:has(> input[type='checkbox']) {
+  @apply -ml-5 list-none;
+}
+.prose-qa input[type='checkbox'] {
+  @apply mr-1.5 align-[-1px] accent-[var(--pass)];
+}
+.prose-qa code {
+  @apply rounded bg-sunken px-1 py-0.5 font-mono text-[12px];
+}
+.prose-qa pre {
+  @apply overflow-x-auto rounded-md border border-line bg-sunken p-3;
+}
+.prose-qa pre code {
+  @apply bg-transparent p-0;
+}
+.prose-qa blockquote {
+  @apply border-l-2 border-line-strong pl-3 text-muted;
+}
+.prose-qa table {
+  @apply w-full border-collapse text-[12.5px];
+}
+.prose-qa th {
+  @apply border-b border-line-strong px-2 py-1.5 text-left font-semibold text-muted;
+}
+.prose-qa td {
+  @apply border-b border-line px-2 py-1.5 align-top;
+}
+.prose-qa hr {
+  @apply border-line;
+}
+.prose-qa mark,
+mark.hit {
+  @apply rounded-sm bg-accent-soft px-0.5 text-ink;
+}
+
+/* Document editor (Tiptap): the same look as rendered Markdown, plus editing affordances. */
+.doc-editor {
+  min-height: 60vh;
+  caret-color: var(--accent);
+}
+.doc-editor ul[data-type='taskList'] {
+  @apply list-none pl-0;
+}
+.doc-editor ul[data-type='taskList'] li {
+  @apply flex items-start gap-2;
+}
+.doc-editor ul[data-type='taskList'] li > label {
+  @apply mt-[0.2em] shrink-0 select-none;
+}
+.doc-editor ul[data-type='taskList'] li > div {
+  @apply min-w-0 flex-1;
+}
+.doc-editor ul[data-type='taskList'] input[type='checkbox'] {
+  @apply mr-0;
+}
+.doc-editor li > p + p {
+  margin-top: 0.4em;
+}
+.doc-editor table td,
+.doc-editor table th {
+  @apply relative min-w-[4em] border border-line;
+}
+.doc-editor .selectedCell::after {
+  @apply pointer-events-none absolute inset-0 bg-accent/10 content-[''];
+}
+.doc-editor .ProseMirror-selectednode {
+  @apply rounded-sm outline-2 outline-accent;
+}
+.doc-editor .tableWrapper {
+  @apply overflow-x-auto;
+}
